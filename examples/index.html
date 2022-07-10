@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Examples · RVModelingToolkit</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.044/juliamono.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">RVModelingToolkit</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">RVModelingToolkit.jl</a></li><li class="is-active"><a class="tocitem" href>Examples</a></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Examples</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Examples</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/astrobc1/RVModelingToolkit.jl/blob/master/docs/src/examples.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Examples"><a class="docs-heading-anchor" href="#Examples">Examples</a><a id="Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Examples" title="Permalink"></a></h1><h4 id="Example-1:-KELT-24,-a-massive-hot-Jupiter,-no-GP"><a class="docs-heading-anchor" href="#Example-1:-KELT-24,-a-massive-hot-Jupiter,-no-GP">Example 1: KELT-24, a massive hot Jupiter, no GP</a><a id="Example-1:-KELT-24,-a-massive-hot-Jupiter,-no-GP-1"></a><a class="docs-heading-anchor-permalink" href="#Example-1:-KELT-24,-a-massive-hot-Jupiter,-no-GP" title="Permalink"></a></h4><p>Download the RVs for KELT-24 from <a href="https://drive.google.com/file/d/1A94iHcSua-p-cQcL8_JRMdPcpAq8-hvr/view?usp=sharing">here</a>.</p><pre><code class="language-julia hljs">
+# Imports
+using RVModelingToolkit
+using Statistics
+using PlotlyJS
+
+# Load in data (csv file with first row time, mnvel, errvel,tel)
+data = read_radvel_file(&quot;kelt24_rvs_20220708_example.txt&quot;)
+
+# Init parameters and planets dictionary
+pars = Parameters()
+planets = Dict{Int, OrbitBasis}()
+
+# Planet 1 (b)
+# per, tc, ecc, w, k;
+# period [days]
+# time of conjunction (BJD)
+# eccentricity ∈ [0, 1]
+# Arg of periastron of star&#39;s orbit [radians]
+# RV semi-amplitude [m/s]
+planets[1] = TCOrbitBasis()
+per1 = 5.5514926
+tc1 =  2457147.0529
+ecc1 = 0.077
+ecc1_unc = 0.04
+w1 = 55 * π / 180
+w1_unc = 15 * π / 180
+pars[&quot;per1&quot;] = Parameter(value=per1, vary=false)
+pars[&quot;tc1&quot;] = Parameter(value=tc1, vary=false)
+pars[&quot;ecc1&quot;] = Parameter(value=ecc1, vary=true)
+add_prior!(pars[&quot;ecc1&quot;], Priors.Uniform(0, 1))
+add_prior!(pars[&quot;ecc1&quot;], Priors.Gaussian(ecc1, ecc1_unc))
+pars[&quot;w1&quot;] = Parameter(value=w1, vary=true)
+add_prior!(pars[&quot;w1&quot;], Priors.Gaussian(w1, w1_unc))
+pars[&quot;k1&quot;] = Parameter(value=450, vary=true)
+add_prior!(pars[&quot;k1&quot;], Priors.Positive())
+
+# Zero points of each spectrograph
+for instname ∈ keys(data)
+    pars[&quot;gamma_$instname&quot;] = Parameter(value=median(data[instname].rv) + π / 100, vary=true)
+end
+
+# Linear trend parameter
+pars[&quot;gamma_dot&quot;] = Parameter(value=0.1, vary=true)
+add_prior!(pars[&quot;gamma_dot&quot;], Priors.Uniform(-1, 1))
+
+# &quot;Jitter&quot; (uncorrelated noise; adds a correction term (must be positive) in-quadrature to the posterior distribution, unique to each spectrograph)
+for instname ∈ keys(data)
+    pname = &quot;jitter_$instname&quot;
+    pars[pname] = Parameter(value=10, vary=true)
+    add_prior!(pars[pname], Priors.JeffreysGD(1E-10, 200))
+end
+
+# TRES jitter tends to be zero, so we overwrite it here
+pars[&quot;jitter_TRES&quot;] = Parameter(value=0, vary=false)
+
+# Store each like in a dictionary
+likes = Dict{String, RVLikelihood}()
+
+# Planets, trend polynomial degree (gammas), trend zero point for terms &gt; 0, also used in plots
+model = RVModel(planets, 1, t0=round(median(get_times(data))))
+
+# Construct single likelihood and posterior objects. Here the key &quot;rvs_all&quot; is arbitrary.
+likes[&quot;rvs_all&quot;] = RVLikelihood(data, model)
+post = RVPosterior(likes)
+update_latex_strings!(post, pars)
+
+# maximize lnL with NelderMead (returns NamedTuple)
+map_result = run_mapfit(post, pars)
+pbest = map_result.pbest
+println(pbest)
+
+# Interactive RV plots with PlotlyJS
+star_name = &quot;KELT-24&quot;
+data_colors = Dict(&quot;TRES&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;SONG&quot; =&gt; COLORS_HEX_GADFLY[2])
+fig_full, fig_res = plot_rvs_full(post, pbest, data_colors=data_colors)
+PlotlyJS.savefig(fig_full, &quot;$(star_name)_rvs.html&quot;)
+PlotlyJS.savefig(fig_res, &quot;$(star_name)_rvs_residuals.html&quot;)
+figs_phased, figs_phased_res = plot_rvs_phased_all(post, pbest, data_colors=data_colors, star_name=star_name)
+for i=1:length(figs_phased)
+    PlotlyJS.savefig(figs_phased[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased.html&quot;)
+    PlotlyJS.savefig(figs_phased_res[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased_residuals.html&quot;)
+end
+
+# MCMC (returns NamedTuple)
+mcmc_result = run_mcmc(post, pbest, n_burn_steps=500, n_τs_thresh=40, n_min_steps=1000, n_max_steps=50_000)
+
+# Corner plot
+fig = corner_plot(post, mcmc_result)
+fig.savefig(&quot;$(star_name)_corner.png&quot;)
+
+# Model comparison (Vector of NamedTuples sorted by the delta AICc)
+mc_result = model_comparison(post, pbest)</code></pre><h4 id="Example-2:-AU-Mic,-with-disjoint-GPs."><a class="docs-heading-anchor" href="#Example-2:-AU-Mic,-with-disjoint-GPs.">Example 2: AU Mic, with disjoint GPs.</a><a id="Example-2:-AU-Mic,-with-disjoint-GPs.-1"></a><a class="docs-heading-anchor-permalink" href="#Example-2:-AU-Mic,-with-disjoint-GPs." title="Permalink"></a></h4><p>Download the RVs for AU Mic from <a href="https://drive.google.com/file/d/193QMqe3hFamTdVJQlkYSiW7xYAKn0YWs/view?usp=sharing">here</a>.</p><pre><code class="language-julia hljs">using RVModelingToolkit
+using Statistics
+using DataStructures
+using PlotlyJS
+
+# Data
+fname = &quot;aumic_rvs_20220710_example.txt&quot;
+data = read_radvel_file(fname)
+
+# Init parameters and planets dictionary
+pars = Parameters()
+planets = OrderedDict{Int, OrbitBasis}()
+
+# Planet 1 (detected at a few sigma here)
+planets[1] = TCOrbitBasis()
+per1 = 8.4629991
+tc1 = 2458330.39046
+ecc1 = 0.189
+w1 = 1.5449655 + π
+
+pars[&quot;per1&quot;] = Parameter(value=per1, vary=false)
+pars[&quot;tc1&quot;] = Parameter(value=tc1, vary=false)
+pars[&quot;ecc1&quot;] = Parameter(value=ecc1, vary=false)
+pars[&quot;w1&quot;] = Parameter(value=w1, vary=false)
+pars[&quot;k1&quot;] = Parameter(value=8, vary=true)
+add_prior!(pars[&quot;k1&quot;], Priors.Positive())
+
+# Planet c (not detected through this analysis)
+planets[2] = TCOrbitBasis()
+per2 = 18.858991
+tc2 = 2458342.2243
+
+pars[&quot;per2&quot;] = Parameter(value=per2, vary=false)
+pars[&quot;tc2&quot;] = Parameter(value=tc2, vary=false)
+pars[&quot;ecc2&quot;] = Parameter(value=0, vary=false)
+pars[&quot;w2&quot;] = Parameter(value=π, vary=false)
+pars[&quot;k2&quot;] = Parameter(value=5, vary=true)
+add_prior!(pars[&quot;k2&quot;], Priors.Positive())
+
+# Gamma offsets, don&#39;t include gamma dot or ddot yet
+for instname ∈ keys(data)
+    pars[&quot;gamma_$instname&quot;] = Parameter(value=median(data[instname].rv) + π / 100, vary=true)
+end
+
+# Fix jitter to zero by default
+for instname ∈ keys(data)
+    pname = &quot;jitter_$instname&quot;
+    pars[pname] = Parameter(value=0, vary=false)
+end
+
+# Increase HIRES error bars
+pars[&quot;jitter_HIRES&quot;] = Parameter(value=5, vary=false)
+
+# GP amplitudes for each spectrogrpah
+for (i, instname) ∈ enumerate(keys(data))
+    pname = &quot;gp_amp_$instname&quot;
+    pars[pname] = Parameter(value=std(data[instname].rv), vary=true)
+    add_prior!(pars[pname], Priors.JeffreysGD(1, 600))
+    pars[pname].latex_str = L&quot;\eta_{\sigma,%$instname}&quot;
+end
+
+# GP decay time (days)
+pars[&quot;gp_decay&quot;] = Parameter(value=100, vary=false)
+add_prior!(pars[&quot;gp_decay&quot;], Priors.Uniform(20, 2_000))
+pars[&quot;gp_decay&quot;].latex_str = L&quot;\eta_{\tau}&quot;
+
+# GP smoothness (unitless)
+pars[&quot;gp_per_length&quot;] = Parameter(value=0.28, vary=false)
+pars[&quot;gp_per_length&quot;].latex_str = &quot;\eta_{\ell}&quot;
+
+# GP period (days)
+pars[&quot;gp_per&quot;] = Parameter(value=4.836, vary=true)
+add_prior!(pars[&quot;gp_per&quot;], Priors.Gaussian(pars[&quot;gp_per&quot;].value, 0.001))
+pars[&quot;gp_per&quot;].latex_str = L&quot;\eta_{P}&quot;
+
+# noise, model, like, post
+# Each spectrograph gets its own like here
+likes = OrderedDict{String, RVLikelihood}()
+for _data ∈ values(data)
+    data_view = get_view(data, [_data.instname])
+    model = RVModel(planets, 0, t0=2450000.0)
+    gp = GaussianProcess(QuasiPeriodic([&quot;gp_amp_$(_data.instname)&quot;, &quot;gp_decay&quot;, &quot;gp_per_length&quot;, &quot;gp_per&quot;]))
+    likes[_data.instname] = RVLikelihood(data_view, model, gp)
+end
+
+post = RVPosterior(likes)
+update_latex_strings!(post, pars)
+
+# Map fit
+map_result = run_mapfit(post, pars)
+
+# Alias best fit params
+pbest = map_result.pbest
+println(pbest)
+
+# RV plots, also color GPs to match spectrographs
+star_name = &quot;AU_Mic&quot;
+data_colors = Dict(&quot;HIRES&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;TRES&quot; =&gt; COLORS_HEX_GADFLY[2], &quot;SPIRou&quot; =&gt; COLORS_HEX_GADFLY[3], &quot;iSHELL&quot; =&gt; COLORS_HEX_GADFLY[4])
+gp_colors = Dict(&quot;GP [HIRES]&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;GP [TRES]&quot; =&gt; COLORS_HEX_GADFLY[2], &quot;GP [SPIRou]&quot; =&gt; COLORS_HEX_GADFLY[3], &quot;GP [iSHELL]&quot; =&gt; COLORS_HEX_GADFLY[4])
+fig_full, fig_res = plot_rvs_full(post, pbest, data_colors=data_colors, gp_colors=gp_colors, gp_Δt=50, gp_δt=0.02)
+PlotlyJS.savefig(fig_full, &quot;$(star_name)_rvs.html&quot;)
+PlotlyJS.savefig(fig_res, &quot;$(star_name)_rvs_residuals.html&quot;)
+figs_phased, figs_phased_res = plot_rvs_phased_all(post, pbest, data_colors=data_colors, titles=true, star_name=&quot;AU Mic&quot;)
+for i=1:length(figs_phased)
+    PlotlyJS.savefig(figs_phased[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased.html&quot;)
+    PlotlyJS.savefig(figs_phased_res[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased_residuals.html&quot;)
+end
+
+# MCMC
+mcmc_result = run_mcmc(post, pbest, n_burn_steps=500, n_τs_thresh=40, n_min_steps=1000, n_max_steps=80_000)
+
+# Corner plot
+fig = corner_plot(post, mcmc_result)
+fig.savefig(&quot;$(star_name)_corner.png&quot;, dpi=200)</code></pre><h4 id="Example-3:-AU-Mic,-with-J1-kernel."><a class="docs-heading-anchor" href="#Example-3:-AU-Mic,-with-J1-kernel.">Example 3: AU Mic, with J1 kernel.</a><a id="Example-3:-AU-Mic,-with-J1-kernel.-1"></a><a class="docs-heading-anchor-permalink" href="#Example-3:-AU-Mic,-with-J1-kernel." title="Permalink"></a></h4><pre><code class="language-julia hljs">using RVModelingToolkit
+using Statistics
+using DataStructures
+using PlotlyJS
+
+# Data
+fname = &quot;aumic_rvs_20220710_example.txt&quot;
+data = read_radvel_file(fname)
+
+# Init parameters and planets dictionary
+pars = Parameters()
+planets = OrderedDict{Int, OrbitBasis}()
+
+# Planet 1 (detected at a few sigma here)
+planets[1] = TCOrbitBasis()
+per1 = 8.4629991
+tc1 = 2458330.39046
+ecc1 = 0.189
+w1 = 1.5449655 + π
+
+pars[&quot;per1&quot;] = Parameter(value=per1, vary=false)
+pars[&quot;tc1&quot;] = Parameter(value=tc1, vary=false)
+pars[&quot;ecc1&quot;] = Parameter(value=ecc1, vary=false)
+pars[&quot;w1&quot;] = Parameter(value=w1, vary=false)
+pars[&quot;k1&quot;] = Parameter(value=8, vary=true)
+add_prior!(pars[&quot;k1&quot;], Priors.Positive())
+
+# Planet c (not detected through this analysis)
+planets[2] = TCOrbitBasis()
+per2 = 18.858991
+tc2 = 2458342.2243
+
+pars[&quot;per2&quot;] = Parameter(value=per2, vary=false)
+pars[&quot;tc2&quot;] = Parameter(value=tc2, vary=false)
+pars[&quot;ecc2&quot;] = Parameter(value=0, vary=false)
+pars[&quot;w2&quot;] = Parameter(value=π, vary=false)
+pars[&quot;k2&quot;] = Parameter(value=5, vary=true)
+add_prior!(pars[&quot;k2&quot;], Priors.Positive())
+
+# Gamma offsets, don&#39;t include gamma dot or ddot yet
+for instname ∈ keys(data)
+    pars[&quot;gamma_$instname&quot;] = Parameter(value=median(data[instname].rv) + π / 100, vary=true)
+end
+
+# Fix jitter to zero by default
+for instname ∈ keys(data)
+    pname = &quot;jitter_$instname&quot;
+    pars[pname] = Parameter(value=0, vary=false)
+end
+
+# Increase HIRES error bars
+pars[&quot;jitter_HIRES&quot;] = Parameter(value=5, vary=false)
+
+# # GP amps
+gp_par_names = String[]
+for (i, instname) ∈ enumerate(keys(data))
+    pname = &quot;gp_amp_&quot; * instname
+    push!(gp_par_names, pname)
+    pars[pname] = Parameter(value=std(data[instname].rv), vary=true)
+    add_prior!(pars[pname], Priors.JeffreysGD(1, 600))
+    pars[pname].latex_str = L&quot;\eta_{\sigma,%$instname}&quot;
+end
+
+# GP decay time
+pars[&quot;gp_decay&quot;] = Parameter(value=100, vary=false)
+add_prior!(pars[&quot;gp_decay&quot;], Priors.Uniform(20, 2_000))
+pars[&quot;gp_decay&quot;].latex_str = L&quot;\eta_{\\tau}&quot;
+push!(gp_par_names, &quot;gp_decay&quot;)
+
+# GP smoothness
+pars[&quot;gp_per_length&quot;] = Parameter(value=0.28, vary=false)
+pars[&quot;gp_per_length&quot;].latex_str = L&quot;\eta_{\ell}&quot;
+push!(gp_par_names, &quot;gp_per_length&quot;)
+
+# GP period
+pars[&quot;gp_per&quot;] = Parameter(value=4.836, vary=true)
+add_prior!(pars[&quot;gp_per&quot;], Priors.Gaussian(pars[&quot;gp_per&quot;].value, 0.001))
+pars[&quot;gp_per&quot;].latex_str = L&quot;\eta_{P}&quot;
+push!(gp_par_names, &quot;gp_per&quot;)
+
+# noise, model, like, post
+# Each spectrograph gets its own like here
+likes = Dict{String, RVLikelihood}()
+model = RVModel(planets, 0, t0=2450000.0)
+gp = GaussianProcess(ChromaticKernelJ1(gp_par_names))
+likes[&quot;rvs_j1&quot;] = RVLikelihood(data, model, gp)
+
+post = RVPosterior(likes)
+update_latex_strings!(post, pars)
+
+# Map fit
+map_result = run_mapfit(post, pars)
+
+# Alias best fit params
+pbest = map_result.pbest
+println(pbest)
+
+# RV plots, also color GPs to match spectrographs
+star_name = &quot;AU_Mic&quot;
+data_colors = Dict(&quot;HIRES&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;TRES&quot; =&gt; COLORS_HEX_GADFLY[2], &quot;SPIRou&quot; =&gt; COLORS_HEX_GADFLY[3], &quot;iSHELL&quot; =&gt; COLORS_HEX_GADFLY[4])
+gp_colors = Dict(&quot;GP HIRES&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;GP TRES&quot; =&gt; COLORS_HEX_GADFLY[2], &quot;GP SPIRou&quot; =&gt; COLORS_HEX_GADFLY[3], &quot;GP iSHELL&quot; =&gt; COLORS_HEX_GADFLY[4])
+fig_full, fig_res = plot_rvs_full(post, pbest, data_colors=data_colors, gp_colors=gp_colors, gp_Δt=50, gp_δt=0.02)
+PlotlyJS.savefig(fig_full, &quot;$(star_name)_rvs.html&quot;)
+PlotlyJS.savefig(fig_res, &quot;$(star_name)_rvs_residuals.html&quot;)
+figs_phased, figs_phased_res = plot_rvs_phased_all(post, pbest, data_colors=data_colors, titles=true, star_name=&quot;AU Mic&quot;)
+for i=1:length(figs_phased)
+    PlotlyJS.savefig(figs_phased[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased.html&quot;)
+    PlotlyJS.savefig(figs_phased_res[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased_residuals.html&quot;)
+end
+
+# MCMC
+mcmc_result = run_mcmc(post, pbest, n_burn_steps=500, n_τs_thresh=40, n_min_steps=1000, n_max_steps=80_000)
+
+# Corner plot
+fig = corner_plot(post, mcmc_result)
+fig.savefig(&quot;$(star_name)_corner.png&quot;, dpi=200)</code></pre><h4 id="Example-4:-AU-Mic,-with-J2-kernel."><a class="docs-heading-anchor" href="#Example-4:-AU-Mic,-with-J2-kernel.">Example 4: AU Mic, with J2 kernel.</a><a id="Example-4:-AU-Mic,-with-J2-kernel.-1"></a><a class="docs-heading-anchor-permalink" href="#Example-4:-AU-Mic,-with-J2-kernel." title="Permalink"></a></h4><pre><code class="language-julia hljs">using RVModelingToolkit
+using Statistics
+using DataStructures
+using PlotlyJS
+
+# Data
+fname = &quot;aumic_rvs_20220710_example.txt&quot;
+data = read_radvel_file(fname)
+data[&quot;HIRES&quot;].λ = 550.0
+data[&quot;TRES&quot;].λ = 650
+data[&quot;SPIRou&quot;].λ = 1650.0
+data[&quot;iSHELL&quot;].λ = 2350.0
+
+# Init parameters and planets dictionary
+pars = Parameters()
+planets = OrderedDict{Int, OrbitBasis}()
+
+# Planet 1 (detected at a few sigma here)
+planets[1] = TCOrbitBasis()
+per1 = 8.4629991
+tc1 = 2458330.39046
+ecc1 = 0.189
+w1 = 1.5449655 + π
+
+pars[&quot;per1&quot;] = Parameter(value=per1, vary=false)
+pars[&quot;tc1&quot;] = Parameter(value=tc1, vary=false)
+pars[&quot;ecc1&quot;] = Parameter(value=ecc1, vary=false)
+pars[&quot;w1&quot;] = Parameter(value=w1, vary=false)
+pars[&quot;k1&quot;] = Parameter(value=8, vary=true)
+add_prior!(pars[&quot;k1&quot;], Priors.Positive())
+
+# Planet c (not detected through this analysis)
+planets[2] = TCOrbitBasis()
+per2 = 18.858991
+tc2 = 2458342.2243
+
+pars[&quot;per2&quot;] = Parameter(value=per2, vary=false)
+pars[&quot;tc2&quot;] = Parameter(value=tc2, vary=false)
+pars[&quot;ecc2&quot;] = Parameter(value=0, vary=false)
+pars[&quot;w2&quot;] = Parameter(value=π, vary=false)
+pars[&quot;k2&quot;] = Parameter(value=5, vary=true)
+add_prior!(pars[&quot;k2&quot;], Priors.Positive())
+
+# Gamma offsets, don&#39;t include gamma dot or ddot yet
+for instname ∈ keys(data)
+    pars[&quot;gamma_$instname&quot;] = Parameter(value=median(data[instname].rv) + π / 100, vary=true)
+end
+
+# Fix jitter to zero by default
+for instname ∈ keys(data)
+    pname = &quot;jitter_$instname&quot;
+    pars[pname] = Parameter(value=0, vary=false)
+end
+
+# Increase HIRES error bars
+pars[&quot;jitter_HIRES&quot;] = Parameter(value=5, vary=false)
+
+# GP
+gp_par_names = String[]
+push!(gp_par_names, &quot;gp_amp_0&quot;)
+pars[&quot;gp_amp_0&quot;] = Parameter(value=150, vary=true)
+add_prior!(pars[&quot;gp_amp_0&quot;], Priors.JeffreysGD(1, 600))
+pars[&quot;gp_amp_0&quot;].latex_str = L&quot;\eta_{\sigma,0}&quot;
+
+# GP
+push!(gp_par_names, &quot;gp_amp_pl&quot;)
+pars[&quot;gp_amp_pl&quot;] = Parameter(value=1.5, vary=true)
+add_prior!(pars[&quot;gp_amp_pl&quot;], Priors.Uniform(-2, 4))
+pars[&quot;gp_amp_pl&quot;].latex_str = L&quot;\eta_{\lambda}&quot;
+
+# GP decay time
+pars[&quot;gp_decay&quot;] = Parameter(value=100, vary=false)
+add_prior!(pars[&quot;gp_decay&quot;], Priors.Uniform(20, 2_000))
+pars[&quot;gp_decay&quot;].latex_str = L&quot;\eta_{\\tau}&quot;
+push!(gp_par_names, &quot;gp_decay&quot;)
+
+# GP smoothness
+pars[&quot;gp_per_length&quot;] = Parameter(value=0.28, vary=false)
+pars[&quot;gp_per_length&quot;].latex_str = L&quot;\eta_{\ell}&quot;
+push!(gp_par_names, &quot;gp_per_length&quot;)
+
+# GP period
+pars[&quot;gp_per&quot;] = Parameter(value=4.836, vary=true)
+add_prior!(pars[&quot;gp_per&quot;], Priors.Gaussian(pars[&quot;gp_per&quot;].value, 0.001))
+pars[&quot;gp_per&quot;].latex_str = L&quot;\eta_{P}&quot;
+push!(gp_par_names, &quot;gp_per&quot;)
+
+# noise, model, like, post
+likes = OrderedDict{String, RVLikelihood}()
+model = RVModel(planets, 0, t0=2450000.0)
+gp = GaussianProcess(ChromaticKernelJ2(gp_par_names, 550.0))
+likes[&quot;rvs_j2&quot;] = RVLikelihood(data, model, gp)
+
+post = RVPosterior(likes)
+update_latex_strings!(post, pars)
+
+# Map fit
+map_result = run_mapfit(post, pars)
+
+# Alias best fit params
+pbest = map_result.pbest
+println(pbest)
+
+# RV plots, also color GPs to match spectrographs
+star_name = &quot;AU_Mic&quot;
+data_colors = Dict(&quot;HIRES&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;TRES&quot; =&gt; COLORS_HEX_GADFLY[2], &quot;SPIRou&quot; =&gt; COLORS_HEX_GADFLY[3], &quot;iSHELL&quot; =&gt; COLORS_HEX_GADFLY[4])
+gp_colors = Dict(&quot;GP 550&quot; =&gt; COLORS_HEX_GADFLY[1], &quot;GP 650&quot; =&gt; COLORS_HEX_GADFLY[2], &quot;GP 1650&quot; =&gt; COLORS_HEX_GADFLY[3], &quot;GP 2350&quot; =&gt; COLORS_HEX_GADFLY[4])
+fig_full, fig_res = plot_rvs_full(post, pbest, data_colors=data_colors, gp_colors=gp_colors, gp_Δt=50, gp_δt=0.02)
+PlotlyJS.savefig(fig_full, &quot;$(star_name)_rvs.html&quot;)
+PlotlyJS.savefig(fig_res, &quot;$(star_name)_rvs_residuals.html&quot;)
+figs_phased, figs_phased_res = plot_rvs_phased_all(post, pbest, data_colors=data_colors, titles=true, star_name=&quot;AU Mic&quot;)
+for i=1:length(figs_phased)
+    PlotlyJS.savefig(figs_phased[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased.html&quot;)
+    PlotlyJS.savefig(figs_phased_res[i], &quot;$(star_name)_$(ALPHABET[i])_rvs_phased_residuals.html&quot;)
+end
+
+# MCMC
+mcmc_result = run_mcmc(post, pbest, n_burn_steps=500, n_τs_thresh=40, n_min_steps=1000, n_max_steps=80_000)
+
+# Corner plot
+fig = corner_plot(post, mcmc_result)
+fig.savefig(&quot;$(star_name)_corner.png&quot;, dpi=200)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« RVModelingToolkit.jl</a><a class="docs-footer-nextpage" href="../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.19 on <span class="colophon-date" title="Sunday 10 July 2022 15:42">Sunday 10 July 2022</span>. Using Julia version 1.7.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
